@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Property Management System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8fafc; font-family: 'Segoe UI', system-ui, sans-serif; }
+    #wrapper { display: flex; width: 100%; align-items: stretch; }
+    #content { width: 100%; padding: 30px; min-height: 100vh; min-width: 0; }
+
+    .card-stat { border: none; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .panel-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
+    .chart-box { position: relative; height: 290px; }
+
+    .badge-paid { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .badge-unpaid { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .badge-vacant { background-color: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; }
+    .badge-na { background-color: #f1f5f9; color: #64748b; }
+
+    .share-bar { height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; min-width: 80px; }
+    .share-bar > div { height: 100%; background: #ef4444; border-radius: 10px; }
+
+    /* ---------- Sidebar ---------- */
+    #sidebar {
+      min-width: 270px; max-width: 270px; background: #0f172a; color: #fff;
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+      transition: transform 0.25s ease;
+    }
+    .sidebar-header {
+      padding: 22px 20px; font-weight: 700; font-size: 1.1rem;
+      border-bottom: 1px solid #1e293b; display: flex; align-items: center;
+    }
+    .sidebar-section { padding: 16px 14px 4px; }
+    .sidebar-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #64748b; padding: 0 8px 8px;
+    }
+    .month-picker { display: flex; gap: 6px; }
+    .month-picker select {
+      flex: 1; background: #1e293b; color: #fff; border: 1px solid #334155;
+      border-radius: 8px; padding: 7px 10px; font-size: 0.9rem; min-width: 0;
+    }
+    .month-picker button {
+      background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
+      border-radius: 8px; width: 36px; transition: 0.15s;
+    }
+    .month-picker button:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .nav-item-link {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
+      color: #94a3b8; text-decoration: none; font-size: 0.93rem;
+      transition: 0.15s; cursor: pointer;
+    }
+    .nav-item-link i { width: 18px; text-align: center; }
+    .nav-item-link:hover { background: #1e293b; color: #fff; }
+    .nav-item-link.active { background: #3b82f6; color: #fff; font-weight: 600; }
+    .nav-item-link .count {
+      margin-left: auto; font-size: 0.72rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; background: #334155; color: #e2e8f0;
+    }
+    .nav-item-link.active .count { background: rgba(255,255,255,0.25); }
+    .count.count-danger { background: #dc2626; color: #fff; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin: 0 4.5px; }
+    .dot-all { background: #94a3b8; } .dot-paid { background: #22c55e; }
+    .dot-unpaid { background: #ef4444; } .dot-vacant { background: #64748b; }
+    .sidebar-footer { margin-top: auto; padding: 14px; border-top: 1px solid #1e293b; }
+    .sidebar-footer button {
+      width: 100%; background: transparent; color: #94a3b8; border: 1px solid #334155;
+      border-radius: 8px; padding: 8px; font-size: 0.85rem; transition: 0.15s;
+    }
+    .sidebar-footer button:hover { background: #1e293b; color: #fff; }
+
+    #menuToggle { display: none; }
+    @media (max-width: 991px) {
+      #sidebar { position: fixed; z-index: 1040; transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #menuToggle { display: inline-block; }
+      #content { padding: 16px; }
+      #sidebarBackdrop.show { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1030; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="wrapper">
+
+  <!-- ===== SIDEBAR ===== -->
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <i class="fa-solid fa-building-user text-primary me-2 fs-4"></i>
+      <span>Property Manager</span>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Month</div>
+      <div class="month-picker">
+        <button title="Previous month" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+        <select id="sheetSelector" onchange="loadDashboard(this.value)">
+          <option value="">Loading...</option>
+        </select>
+        <button title="Next month" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Menu</div>
+      <a class="nav-item-link active" data-view="ledger" onclick="switchView('ledger')">
+        <i class="fa-solid fa-table-cells"></i> Rent Ledger
+      </a>
+      <a class="nav-item-link" data-view="analytics" onclick="switchView('analytics')">
+        <i class="fa-solid fa-chart-pie"></i> Financials
+      </a>
+      <a class="nav-item-link" data-view="expenses" onclick="switchView('expenses')">
+        <i class="fa-solid fa-money-bill-wave"></i> Monthly Operation
+        <span class="count" id="cntExpenses">$0.00</span>
+      </a>
+      <a class="nav-item-link" data-view="debts" onclick="switchView('debts')">
+        <i class="fa-solid fa-triangle-exclamation"></i> Overdue &amp; Debts
+        <span class="count count-danger d-none" id="cntOverdue">0</span>
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Quick Filters</div>
+      <a class="nav-item-link" data-filter="" onclick="quickFilter('')">
+        <span class="dot dot-all"></span> All Rooms <span class="count" id="cntAll">0</span>
+      </a>
+      <a class="nav-item-link" data-filter="Paid" onclick="quickFilter('Paid')">
+        <span class="dot dot-paid"></span> Paid <span class="count" id="cntPaid">0</span>
+      </a>
+      <a class="nav-item-link" data-filter="Unpaid" onclick="quickFilter('Unpaid')">
+        <span class="dot dot-unpaid"></span> Unpaid <span class="count" id="cntUnpaid">0</span>
+      </a>
+      <a class="nav-item-link" data-filter="Vacant" onclick="quickFilter('Vacant')">
+        <span class="dot dot-vacant"></span> Vacant <span class="count" id="cntVacant">0</span>
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <button onclick="loadDashboard(document.getElementById('sheetSelector').value)">
+        <i class="fa-solid fa-rotate me-1"></i> Refresh data
+      </button>
+    </div>
+  </nav>
+  <div id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div id="content">
+
+    <button id="menuToggle" class="btn btn-dark btn-sm mb-3" onclick="toggleSidebar()">
+      <i class="fa-solid fa-bars me-1"></i> Menu
+    </button>
+
+    <div id="loader" class="text-center my-5 py-5">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2 text-secondary">Loading management system...</p>
+    </div>
+
+    <div id="mainDashboard" class="d-none">
+
+      <!-- Top cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4 col-12">
+          <div class="card card-stat p-3">
+            <span class="text-uppercase text-muted small fw-bold">Total / Vacant Rooms</span>
+            <div class="fs-4 fw-bold mt-1 text-dark" id="statRooms">-</div>
+          </div>
+        </div>
+        <div class="col-md-4 col-6">
+          <div class="card card-stat p-3">
+            <span class="text-uppercase text-muted small fw-bold">Gross Collected</span>
+            <div class="fs-4 fw-bold text-success mt-1" id="statGross">-</div>
+          </div>
+        </div>
+        <div class="col-md-4 col-6">
+          <div class="card card-stat p-3">
+            <span class="text-uppercase text-muted small fw-bold">Net Cash Flow</span>
+            <div class="fs-4 fw-bold text-info mt-1" id="statNet">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 1: LEDGER -->
+      <div id="view-ledger" class="view-section">
+        <div class="panel-card p-4 mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h5 class="fw-bold mb-0"><i class="fa-solid fa-list-check me-2 text-primary"></i> Tenant Rent &amp; Utility Ledger</h5>
+            <div class="d-flex gap-2">
+              <input type="text" id="roomSearchInput" class="form-control form-control-sm" placeholder="Search room or notes..." onkeyup="filterLedgerTable()" style="width: 200px;">
+              <select id="statusFilterSelect" class="form-select form-select-sm" onchange="filterLedgerTable()" style="width: 150px;">
+                <option value="">All Statuses</option>
+                <option value="Paid">Paid ✅</option>
+                <option value="Unpaid">Unpaid ❌</option>
+                <option value="Vacant">Vacant 🚫</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Floor</th><th>Room</th><th>Rent</th><th>Rent Status</th>
+                  <th>Utilities</th><th>Utility Status</th><th>Total Due</th>
+                  <th>Overdue</th><th>Debt</th><th>Notes</th><th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tenantTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: FINANCIALS -->
+      <div id="view-analytics" class="view-section d-none">
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-3 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Income</span>
+              <div class="fs-4 fw-bold text-success mt-1" id="finGross">-</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Expenses</span>
+              <div class="fs-4 fw-bold text-danger mt-1" id="finExpenses">-</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Net Profit</span>
+              <div class="fs-4 fw-bold text-info mt-1" id="finNet">-</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Rent Collection Rate</span>
+              <div class="fs-4 fw-bold text-primary mt-1" id="finRate">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-lg-6">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-column me-2 text-primary"></i> Income vs Expenses vs Net</h6>
+              <div class="chart-box"><canvas id="chRevExp"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie me-2 text-danger"></i> Where the Money Goes (Expenses)</h6>
+              <div class="chart-box"><canvas id="chExpPie"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-door-open me-2 text-success"></i> Room Status</h6>
+              <div class="chart-box"><canvas id="chStatus"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-hand-holding-dollar me-2 text-warning"></i> Rent Collected vs Not Yet Paid ($)</h6>
+              <div class="chart-box"><canvas id="chRent"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="panel-card p-4">
+              <h5 class="fw-bold mb-3"><i class="fa-solid fa-wallet me-2 text-success"></i> Revenue Breakdown</h5>
+              <ul class="list-group list-group-flush" id="revenueList"></ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="panel-card p-4">
+              <h5 class="fw-bold mb-3"><i class="fa-solid fa-shield-halved me-2 text-warning"></i> Deposits &amp; Liabilities</h5>
+              <ul class="list-group list-group-flush" id="liabilityList"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: MONTHLY OPERATION (EXPENSES) -->
+      <div id="view-expenses" class="view-section d-none">
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-4 col-12">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Total Monthly Operation</span>
+              <div class="fs-3 fw-bold text-danger mt-1" id="expTotal">-</div>
+            </div>
+          </div>
+          <div class="col-md-4 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Number of Items</span>
+              <div class="fs-3 fw-bold text-dark mt-1" id="expCount">-</div>
+            </div>
+          </div>
+          <div class="col-md-4 col-6">
+            <div class="card card-stat p-3">
+              <span class="text-uppercase text-muted small fw-bold">Biggest Expense</span>
+              <div class="fs-6 fw-bold text-dark mt-1" id="expBiggest">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="expNotFound" class="alert alert-warning d-none"></div>
+
+        <div class="row g-4">
+          <div class="col-lg-5">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie me-2 text-danger"></i> Expense Share</h6>
+              <div class="chart-box"><canvas id="chExpPie2"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-7">
+            <div class="panel-card p-4">
+              <h6 class="fw-bold mb-3"><i class="fa-solid fa-money-bill-wave me-2 text-danger"></i> Expense Details</h6>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>#</th><th>Item</th><th class="text-end">Amount</th><th>Share</th><th>Note</th></tr>
+                  </thead>
+                  <tbody id="expenseTableBody"></tbody>
+                  <tfoot id="expenseTableFoot"></tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: OVERDUE -->
+      <div id="view-debts" class="view-section d-none">
+        <div class="panel-card p-4">
+          <h5 class="fw-bold mb-3 text-danger"><i class="fa-solid fa-triangle-exclamation me-2"></i> Unpaid Rent &amp; Outstanding Debtors</h5>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Floor</th><th>Room</th><th>Monthly Rent</th><th>Rent Status</th>
+                  <th>Overdue Months</th><th>Outstanding Debt</th><th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="debtTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit Room Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="modalTitle">Edit Room Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editRowIndex">
+        <div class="mb-3">
+          <label class="form-label fw-bold">Rent Status</label>
+          <select id="editRentStatus" class="form-select">
+            <option value="Paid ✅">Paid ✅</option>
+            <option value="Unpaid ❌">Unpaid ❌</option>
+            <option value="Vacant 🚫">Vacant 🚫</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Electricity &amp; Water Bill ($)</label>
+          <input type="number" step="0.01" id="editUtilitiesBill" class="form-control" placeholder="0.00">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Utilities Status</label>
+          <select id="editUtilitiesStatus" class="form-select">
+            <option value="Paid ✅">Paid ✅</option>
+            <option value="Unpaid ❌">Unpaid ❌</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">Notes / Description</label>
+          <textarea id="editNotes" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveRoomChanges()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  var currentData = null;
+  var editModalObj = null;
+  var currentView = 'ledger';
+  var charts = {};
+  var COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
+                '#14b8a6', '#84cc16', '#a855f7', '#64748b'];
+
+  document.addEventListener("DOMContentLoaded", function () {
+    editModalObj = new bootstrap.Modal(document.getElementById('editModal'));
+    loadDashboard();
+  });
+
+  /* ---------- Navigation ---------- */
+  function switchView(viewName) {
+    currentView = viewName;
+    document.querySelectorAll('.nav-item-link[data-view]').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.view === viewName);
+    });
+    document.querySelectorAll('.view-section').forEach(function (el) {
+      el.classList.add('d-none');
+    });
+    document.getElementById('view-' + viewName).classList.remove('d-none');
+    closeSidebarOnMobile();
+    drawCharts(viewName);
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarBackdrop').classList.toggle('show');
+  }
+
+  function closeSidebarOnMobile() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('show');
+  }
+
+  function changeMonth(step) {
+    var sel = document.getElementById('sheetSelector');
+    var next = sel.selectedIndex + step;
+    if (next < 0 || next >= sel.options.length) return;
+    sel.selectedIndex = next;
+    loadDashboard(sel.value);
+  }
+
+  function quickFilter(status) {
+    document.getElementById('roomSearchInput').value = '';
+    document.getElementById('statusFilterSelect').value = status;
+    switchView('ledger');
+    filterLedgerTable();
+  }
+
+  function syncQuickFilter() {
+    var current = document.getElementById('statusFilterSelect').value;
+    document.querySelectorAll('.nav-item-link[data-filter]').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.filter === current);
+    });
+  }
+
+  /* ---------- Numbers ---------- */
+  function toNum(v) {
+    if (typeof v === 'number') return v;
+    if (v === undefined || v === null) return 0;
+    var n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function esc(t) {
+    return String(t === undefined || t === null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function getStats(data) {
+    var st = { paid: 0, unpaid: 0, vacant: 0, other: 0, paidRent: 0, unpaidRent: 0 };
+    (data.rooms || []).forEach(function (r) {
+      var s = String(r.rentStatus || '');
+      if (s.includes('Unpaid')) { st.unpaid++; st.unpaidRent += toNum(r.monthlyRent); }
+      else if (s.includes('Paid')) { st.paid++; st.paidRent += toNum(r.monthlyRent); }
+      else if (s.includes('Vacant')) st.vacant++;
+      else st.other++;
+    });
+    return st;
+  }
+
+  function getExpenseTotal(data) {
+    var ex = data.expenses;
+    if (ex && ex.found) return toNum(ex.total);
+    return toNum(data.summary['TOTAL OPERATING EXPENSES']);
+  }
+
+  function updateSidebarCounts(data) {
+    var st = getStats(data);
+    document.getElementById('cntAll').innerText = (data.rooms || []).length;
+    document.getElementById('cntPaid').innerText = st.paid;
+    document.getElementById('cntUnpaid').innerText = st.unpaid;
+    document.getElementById('cntVacant').innerText = st.vacant;
+
+    var od = (data.overdueRooms || []).length;
+    var odEl = document.getElementById('cntOverdue');
+    odEl.innerText = od;
+    odEl.classList.toggle('d-none', od === 0);
+
+    document.getElementById('cntExpenses').innerText = formatCurrency(getExpenseTotal(data));
+  }
+
+  /* ---------- Loading data ---------- */
+  function loadDashboard(sheetName) {
+    document.getElementById('loader').classList.remove('d-none');
+    document.getElementById('mainDashboard').classList.add('d-none');
+
+    google.script.run
+      .withSuccessHandler(renderDashboard)
+      .withFailureHandler(function (err) {
+        document.getElementById('loader').classList.add('d-none');
+        alert("Error: " + err.message);
+      })
+      .getDashboardData(sheetName || '');
+  }
+
+  function renderDashboard(data) {
+    currentData = data;
+    updateSidebarCounts(data);
+
+    var selector = document.getElementById('sheetSelector');
+    selector.innerHTML = '';
+    data.sheetNames.forEach(function (name) {
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (name === data.activeSheetName) opt.selected = true;
+      selector.appendChild(opt);
+    });
+
+    var s = data.summary;
+    var expTotal = getExpenseTotal(data);
+    var gross = toNum(s['TOTAL GROSS CASH COLLECTED']);
+    var netKey = 'NET MONTHLY CASH FLOW (Revenue - Expenses)';
+    var net = (s[netKey] !== undefined) ? toNum(s[netKey]) : (gross - expTotal);
+
+    document.getElementById('statRooms').innerText =
+      (s['Total Rooms'] || (data.rooms || []).length) + ' (' + (s['Vacant Rooms (🚫)'] || 0) + ' Vacant)';
+    document.getElementById('statGross').innerText = formatCurrency(gross);
+    document.getElementById('statNet').innerText = formatCurrency(net);
+
+    renderExpenses(data);
+    renderFinancials(data, gross, expTotal, net);
+    filterLedgerTable();
+
+    // Overdue table
+    var debtTbody = document.getElementById('debtTableBody');
+    debtTbody.innerHTML = '';
+    if (!data.overdueRooms || data.overdueRooms.length === 0) {
+      debtTbody.innerHTML =
+        '<tr><td colspan="7" class="text-center text-muted py-4">No overdue rooms or outstanding debts found for this period!</td></tr>';
+    } else {
+      data.overdueRooms.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><small class="text-muted">' + esc(r.floor) + '</small></td>' +
+          '<td><strong>' + esc(r.room) + '</strong></td>' +
+          '<td>' + formatCurrency(r.monthlyRent) + '</td>' +
+          '<td>' + getStatusBadge(r.rentStatus) + '</td>' +
+          '<td><span class="badge bg-danger">' + r.overdueMonths + ' Months</span></td>' +
+          '<td class="text-danger fw-bold">' + formatCurrency(r.outstandingDebt) + '</td>' +
+          '<td><small class="text-secondary">' + esc(r.notes) + '</small></td>';
+        debtTbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('loader').classList.add('d-none');
+    document.getElementById('mainDashboard').classList.remove('d-none');
+    drawCharts(currentView);
+  }
+
+  /* ---------- Monthly Operation (Expenses) page ---------- */
+  function renderExpenses(data) {
+    var ex = data.expenses || { found: false, items: [], title: 'Monthly Operation' };
+    var items = ex.items || [];
+    var total = getExpenseTotal(data);
+
+    document.getElementById('expTotal').innerText = formatCurrency(total);
+    document.getElementById('expCount').innerText = items.length;
+
+    var warn = document.getElementById('expNotFound');
+    if (!ex.found) {
+      warn.classList.remove('d-none');
+      warn.innerHTML = '<strong>Expense table not found in this month\'s sheet.</strong> ' +
+        'Make sure a cell contains the words "<b>' + esc(ex.title || 'Monthly Operation') + '</b>", ' +
+        'with the items listed underneath and amounts to the right. The total above comes from the sheet summary.';
+    } else {
+      warn.classList.add('d-none');
+    }
+
+    var biggest = null;
+    items.forEach(function (it) { if (!biggest || it.amount > biggest.amount) biggest = it; });
+    document.getElementById('expBiggest').innerText =
+      biggest ? biggest.label + ' (' + formatCurrency(biggest.amount) + ')' : '-';
+
+    var tbody = document.getElementById('expenseTableBody');
+    var tfoot = document.getElementById('expenseTableFoot');
+    tbody.innerHTML = '';
+    tfoot.innerHTML = '';
+
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No expense items to show.</td></tr>';
+      return;
+    }
+
+    var sum = 0;
+    items.forEach(function (it) { sum += toNum(it.amount); });
+
+    items.forEach(function (it, i) {
+      var pct = sum > 0 ? (toNum(it.amount) / sum * 100) : 0;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="text-muted">' + (i + 1) + '</td>' +
+        '<td><span class="dot" style="background:' + COLORS[i % COLORS.length] + ';margin:0 6px 0 0"></span><strong>' + esc(it.label) + '</strong></td>' +
+        '<td class="text-end fw-bold">' + formatCurrency(it.amount) + '</td>' +
+        '<td><div class="d-flex align-items-center gap-2"><div class="share-bar flex-grow-1"><div style="width:' + pct.toFixed(1) + '%;background:' + COLORS[i % COLORS.length] + '"></div></div>' +
+        '<small class="text-muted" style="width:44px">' + pct.toFixed(1) + '%</small></div></td>' +
+        '<td><small class="text-secondary">' + esc(it.note) + '</small></td>';
+      tbody.appendChild(tr);
+    });
+
+    tfoot.innerHTML =
+      '<tr class="table-light"><td></td><td class="fw-bold">TOTAL</td>' +
+      '<td class="text-end fw-bold text-danger">' + formatCurrency(total) + '</td><td></td><td></td></tr>';
+  }
+
+  /* ---------- Financials page ---------- */
+  function renderFinancials(data, gross, expTotal, net) {
+    var s = data.summary;
+    var st = getStats(data);
+    var occupied = st.paid + st.unpaid;
+    var rate = occupied > 0 ? (st.paid / occupied * 100) : 0;
+
+    document.getElementById('finGross').innerText = formatCurrency(gross);
+    document.getElementById('finExpenses').innerText = formatCurrency(expTotal);
+    document.getElementById('finNet').innerText = formatCurrency(net);
+    document.getElementById('finRate').innerText = rate.toFixed(0) + '% (' + st.paid + '/' + occupied + ' rooms)';
+
+    var revList = document.getElementById('revenueList');
+    var liList = document.getElementById('liabilityList');
+    revList.innerHTML = '';
+    liList.innerHTML = '';
+    for (var key in s) {
+      if (isExpenseKey(key)) continue;
+      var isMoney = typeof s[key] === 'number' &&
+        (key.includes('$') || key.includes('Collected') || key.includes('COLLECTED') ||
+         key.includes('CASH') || key.includes('Deposit') || key.includes('Debt'));
+      var itemHtml =
+        '<li class="list-group-item d-flex justify-content-between align-items-center">' +
+        '<span>' + esc(key) + '</span>' +
+        '<strong>' + (isMoney ? formatCurrency(s[key]) : esc(s[key])) + '</strong></li>';
+      if (key.includes('Deposit') || key.includes('Debt')) liList.innerHTML += itemHtml;
+      else revList.innerHTML += itemHtml;
+    }
+  }
+
+  function isExpenseKey(key) {
+    return /expense/i.test(key) && !/net|cash flow/i.test(key);
+  }
+
+  /* ---------- Charts ---------- */
+  function makeChart(id, config) {
+    var canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    charts[id] = new Chart(canvas.getContext('2d'), config);
+  }
+
+  function moneyTip(ctx) {
+    var v = ctx.parsed && ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed;
+    return ' ' + ctx.label + ': ' + formatCurrency(v);
+  }
+
+  function expensePie(id) {
+    var ex = currentData.expenses;
+    var items = (ex && ex.found) ? ex.items : [];
+    if (!items.length) {
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+      return;
+    }
+    makeChart(id, {
+      type: 'doughnut',
+      data: {
+        labels: items.map(function (i) { return i.label; }),
+        datasets: [{
+          data: items.map(function (i) { return toNum(i.amount); }),
+          backgroundColor: items.map(function (i, n) { return COLORS[n % COLORS.length]; }),
+          borderWidth: 2, borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '55%',
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12 } },
+          tooltip: { callbacks: { label: function (c) {
+            var total = c.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+            var pct = total > 0 ? (c.parsed / total * 100).toFixed(1) : 0;
+            return ' ' + c.label + ': ' + formatCurrency(c.parsed) + ' (' + pct + '%)';
+          } } }
+        }
+      }
+    });
+  }
+
+  function drawCharts(view) {
+    if (!currentData || typeof Chart === 'undefined') return;
+
+    if (view === 'expenses') {
+      expensePie('chExpPie2');
+    }
+
+    if (view === 'analytics') {
+      var s = currentData.summary;
+      var st = getStats(currentData);
+      var expTotal = getExpenseTotal(currentData);
+      var gross = toNum(s['TOTAL GROSS CASH COLLECTED']);
+      var netKey = 'NET MONTHLY CASH FLOW (Revenue - Expenses)';
+      var net = (s[netKey] !== undefined) ? toNum(s[netKey]) : (gross - expTotal);
+
+      makeChart('chRevExp', {
+        type: 'bar',
+        data: {
+          labels: ['Income', 'Expenses', 'Net Profit'],
+          datasets: [{
+            data: [gross, expTotal, net],
+            backgroundColor: ['#22c55e', '#ef4444', '#3b82f6'],
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: moneyTip } } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+
+      expensePie('chExpPie');
+
+      makeChart('chStatus', {
+        type: 'doughnut',
+        data: {
+          labels: ['Paid', 'Unpaid', 'Vacant'],
+          datasets: [{
+            data: [st.paid, st.unpaid, st.vacant],
+            backgroundColor: ['#22c55e', '#ef4444', '#94a3b8'],
+            borderWidth: 2, borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '55%',
+          plugins: { legend: { position: 'right', labels: { boxWidth: 12 } },
+            tooltip: { callbacks: { label: function (c) { return ' ' + c.label + ': ' + c.parsed + ' rooms'; } } } }
+        }
+      });
+
+      makeChart('chRent', {
+        type: 'bar',
+        data: {
+          labels: ['Rent Collected', 'Rent Not Yet Paid'],
+          datasets: [{
+            data: [st.paidRent, st.unpaidRent],
+            backgroundColor: ['#22c55e', '#ef4444'],
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: moneyTip } } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+  }
+
+  /* ---------- Search & filter ---------- */
+  function filterLedgerTable() {
+    if (!currentData || !currentData.rooms) return;
+
+    var searchQuery = document.getElementById('roomSearchInput').value.toLowerCase();
+    var statusFilter = document.getElementById('statusFilterSelect').value;
+
+    var filtered = currentData.rooms.filter(function (r) {
+      var matchesSearch =
+        String(r.room || '').toLowerCase().includes(searchQuery) ||
+        String(r.floor || '').toLowerCase().includes(searchQuery) ||
+        String(r.notes || '').toLowerCase().includes(searchQuery);
+
+      var status = String(r.rentStatus || '');
+      var matchesStatus = true;
+      if (statusFilter === 'Paid') matchesStatus = status.includes('Paid') && !status.includes('Unpaid');
+      else if (statusFilter === 'Unpaid') matchesStatus = status.includes('Unpaid');
+      else if (statusFilter === 'Vacant') matchesStatus = status.includes('Vacant');
+
+      return matchesSearch && matchesStatus;
+    });
+
+    renderRoomsTable(filtered);
+    syncQuickFilter();
+  }
+
+  function renderRoomsTable(roomsArray) {
+    var tbody = document.getElementById('tenantTableBody');
+    tbody.innerHTML = '';
+
+    if (roomsArray.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="11" class="text-center text-muted py-4">No matching rooms found.</td></tr>';
+      return;
+    }
+
+    roomsArray.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><small class="text-muted">' + esc(r.floor) + '</small></td>' +
+        '<td><strong>' + esc(r.room) + '</strong></td>' +
+        '<td>' + formatCurrency(r.monthlyRent) + '</td>' +
+        '<td>' + getStatusBadge(r.rentStatus) + '</td>' +
+        '<td>' + formatCurrency(r.utilitiesBill) + '</td>' +
+        '<td>' + getStatusBadge(r.utilitiesStatus) + '</td>' +
+        '<td><strong>' + formatCurrency(r.totalCurrentDue) + '</strong></td>' +
+        '<td>' + (r.overdueMonths > 0 ? '<span class="badge bg-danger">' + r.overdueMonths + ' mo</span>' : '0') + '</td>' +
+        '<td class="' + (r.outstandingDebt > 0 ? 'text-danger fw-bold' : '') + '">' + formatCurrency(r.outstandingDebt) + '</td>' +
+        '<td><small class="text-secondary">' + esc(r.notes) + '</small></td>' +
+        '<td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="openEditModal(' + r.rowIndex + ')">' +
+        '<i class="fa-solid fa-pen-to-square"></i></button></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ---------- Edit room ---------- */
+  function openEditModal(rowIndex) {
+    var room = currentData.rooms.find(function (item) { return item.rowIndex === rowIndex; });
+    if (!room) return;
+
+    document.getElementById('editRowIndex').value = rowIndex;
+    document.getElementById('modalTitle').innerText = 'Edit Room ' + room.room;
+    document.getElementById('editRentStatus').value = room.rentStatus || 'Paid ✅';
+    document.getElementById('editUtilitiesBill').value = room.utilitiesBill || '';
+    document.getElementById('editUtilitiesStatus').value = room.utilitiesStatus || 'Paid ✅';
+    document.getElementById('editNotes').value = room.notes || '';
+
+    editModalObj.show();
+  }
+
+  function saveRoomChanges() {
+    var sheetName = currentData.activeSheetName;
+    var rowIndex = document.getElementById('editRowIndex').value;
+    var rentStatus = document.getElementById('editRentStatus').value;
+    var utilitiesBill = document.getElementById('editUtilitiesBill').value;
+    var utilitiesStatus = document.getElementById('editUtilitiesStatus').value;
+    var notes = document.getElementById('editNotes').value;
+
+    editModalObj.hide();
+    document.getElementById('loader').classList.remove('d-none');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res.success) {
+          loadDashboard(sheetName);
+        } else {
+          document.getElementById('loader').classList.add('d-none');
+          alert("Error: " + res.message);
+        }
+      })
+      .withFailureHandler(function (err) {
+        document.getElementById('loader').classList.add('d-none');
+        alert("Error: " + err.message);
+      })
+      .updateRoomData(sheetName, rowIndex, rentStatus, utilitiesStatus, utilitiesBill, notes);
+  }
+
+  /* ---------- Helpers ---------- */
+  function getStatusBadge(status) {
+    if (!status) return '<span class="badge badge-na">N/A</span>';
+    var str = status.toString();
+    if (str.includes('Unpaid')) return '<span class="badge badge-unpaid">' + esc(str) + '</span>';
+    if (str.includes('Paid')) return '<span class="badge badge-paid">' + esc(str) + '</span>';
+    if (str.includes('Vacant')) return '<span class="badge badge-vacant">' + esc(str) + '</span>';
+    return '<span class="badge badge-na">' + esc(str) + '</span>';
+  }
+
+  function formatCurrency(val) {
+    if (val === undefined || val === null || val === '') return '$0.00';
+    if (typeof val === 'number') return '$' + val.toFixed(2);
+    var n = parseFloat(String(val).replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? String(val) : '$' + n.toFixed(2);
+  }
+</script>
+</body>
+</html>
